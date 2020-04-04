@@ -1,0 +1,1 @@
+hotjar-api-v2
