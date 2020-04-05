@@ -11,20 +11,26 @@ HOTJAR_FUNNELS		CSV formated funnel Ids of funnels to work with, an empty value 
 HOTJAR_INTERVAL		Interval in minutes between fetching data from Hotjar
 ```
 
+## Docker Run
+```
+docker run -p 5000:5000 --restart always -e HOTJAR_USERNAME=Username -e HOTJAR_PASSWORD=Password -e HOTJAR_FUNNELS= -e HOTJAR_INTERVAL=30 --name "hotjar-api" eladbar/hotjar-api:latest
+```
+
 ## Docker Compose
 ```
 version: '2'
 services:
-  hotjarapi:
-    image: "eladbar/hotjar-api:latest"
-    container_name: "hotjar-api"
-    hostname: "hotjar-api"
-    restart: always
-    environment:
-      - HOTJAR_USERNAME=Username
-      - HOTJAR_PASSWORD=Password
-      - HOTJAR_FUNNELS=
-      - HOTJAR_INTERVAL=
+    hotjar-api:
+        ports:
+            - '5000:5000'
+        restart: always
+        environment:
+            - HOTJAR_USERNAME=Username
+            - HOTJAR_PASSWORD=Password
+            - HOTJAR_FUNNELS=
+            - HOTJAR_INTERVAL=30
+        container_name: hotjar-api
+        image: 'eladbar/hotjar-api:latest'
 ```
 
 ## API Endpoints
