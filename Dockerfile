@@ -14,4 +14,4 @@ ENV HOTJAR_FUNNELS ""
 
 EXPOSE 5000
 
-CMD python ./index.py
+CMD python -u ./index.py

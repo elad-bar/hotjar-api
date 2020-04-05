@@ -1,18 +1,18 @@
 import os
 import asyncio
-import logging
 import threading
 
 import flask
 from flask import jsonify
 
+from helpers.docker_logger import get_logger
 from helpers.queryable_datetime import QueryableDateTime
 from hotjar.api import HotjarAPI
 from hotjar.site_manager import SiteManager
 
 SECONDS = 60
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = get_logger(__name__)
 
 
 class WebService:

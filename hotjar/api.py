@@ -1,10 +1,10 @@
 import json
 import math
 import requests
-import logging
 
 from typing import Optional
 
+from helpers.docker_logger import get_logger
 from .exceptions import AuthorizationError
 
 LOGIN_URL = "https://insights.hotjar.com/api/v2/users"
@@ -19,7 +19,7 @@ ENDPOINT_FUNNELS = "funnels"
 ENDPOINT_STATISTICS = "statistics"
 ENDPOINT_FEEDBACK = "feedback"
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = get_logger(__name__)
 
 
 class HotjarAPI:

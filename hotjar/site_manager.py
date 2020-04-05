@@ -1,14 +1,14 @@
 import json
-import logging
 
 from os import path
 
 from datetime import datetime
 
+from helpers.docker_logger import get_logger
 from helpers.queryable_datetime import QueryableDateTime
 from .api import HotjarAPI
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = get_logger(__name__)
 
 
 class SiteManager:
