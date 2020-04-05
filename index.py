@@ -1,12 +1,18 @@
 import os
 import asyncio
+import logging
+import threading
+
 import flask
 from flask import jsonify
-from threading import Timer
 
 from helpers.queryable_datetime import QueryableDateTime
 from hotjar.api import HotjarAPI
 from hotjar.site_manager import SiteManager
+
+SECONDS = 60
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class WebService:
@@ -22,10 +28,10 @@ class WebService:
         self._site_managers = {}
         self._loop = asyncio.get_event_loop()
 
-    def initialize(self):
+    async def initialize(self):
         self._username = os.getenv("HOTJAR_USERNAME")
         self._password = os.getenv("HOTJAR_PASSWORD")
-        self._interval = os.getenv("HOTJAR_INTERVAL", 30)
+        self._interval = int(os.getenv("HOTJAR_INTERVAL", 30)) * SECONDS
 
         specific_funnels = os.getenv("HOTJAR_FUNNELS", "")
 
@@ -50,24 +56,19 @@ class WebService:
 
             return jsonify(data)
 
-        self._loop.run_until_complete(self.init_update_data())
+        threading.Timer(0.1, self.update_data_once).start()
 
-        self._loop.call_later(30, self.update_data)
+        self._web_service.run(host='0.0.0.0')
 
-        self._web_service.run()
+    def update_data_once(self):
+        if self._is_updating:
+            _LOGGER.warning(f"Skipping update data")
 
-    async def init_update_data(self):
-        print("Initializing update data process")
-        await self.update_data_once()
+            return
 
-    async def update_data(self):
-        while True:
-            await self.update_data_once() # .__await__()
+        self._is_updating = True
 
-            await asyncio.sleep(self._interval) # .__await__()
-
-    async def update_data_once(self):
-        print("Updating data")
+        _LOGGER.debug("Updating data")
 
         resources = self._api.get_resources()
 
@@ -85,9 +86,13 @@ class WebService:
                 self._site_managers[site_id] = site_manager
 
             if site_id is not None:
-                print(f"Site: {site_name} ({site_id})")
+                _LOGGER.debug(f"Site: {site_name} ({site_id})")
 
                 site_manager.update()
+
+        threading.Timer(self._interval, self.update_data_once).start()
+
+        self._is_updating = False
 
     def aggregate(self):
         result = {}
@@ -98,7 +103,7 @@ class WebService:
             result[str(site_id)] = {
                 "id": site_id,
                 "name": site_manager.name,
-                "data": site_manager.data
+                "funnels": site_manager.data
             }
 
         return result
@@ -110,10 +115,10 @@ class WebService:
         for site_id in data:
             site_details = data[site_id]
             site_name = site_details.get("name")
-            site_data = site_details.get("data", {})
+            funnels = site_details.get("funnels", {})
 
-            for funnel_id in site_data:
-                funnel_details = site_data[funnel_id]
+            for funnel_id in funnels:
+                funnel_details = funnels[funnel_id]
                 funnel_name = funnel_details.get("name")
                 funnel_created = funnel_details.get("created")
                 funnel_steps = funnel_details.get("steps")
@@ -151,6 +156,6 @@ class WebService:
 
 
 web = WebService()
-web.initialize()
+asyncio.get_event_loop().run_until_complete(web.initialize())
 
 

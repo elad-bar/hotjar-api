@@ -1,4 +1,6 @@
 import json
+import logging
+
 from os import path
 
 from datetime import datetime
@@ -6,7 +8,7 @@ from datetime import datetime
 from helpers.queryable_datetime import QueryableDateTime
 from .api import HotjarAPI
 
-PREFERRED_FUNNEL_ID = 467218
+_LOGGER = logging.getLogger(__name__)
 
 
 class SiteManager:
@@ -41,7 +43,7 @@ class SiteManager:
             json.dump(self.data, outfile)
 
     def update(self):
-        print(f"Updating site: {self._site_name} ({self._site_id})")
+        _LOGGER.debug(f"Updating site: {self._site_name} ({self._site_id})")
 
         all_funnels = self._api.get_site_funnels(self._site_id)
 
@@ -50,10 +52,10 @@ class SiteManager:
             funnel_id = funnel.get("id")
 
             if self._specific_funnels is not None and str(funnel_id) not in self._specific_funnels:
-                print(f"Skipping funnel: {funnel_name} ({funnel_id})")
+                _LOGGER.debug(f"Skipping funnel: {funnel_name} ({funnel_id})")
                 continue
 
-            print(f"Processing funnel: {funnel_name} ({funnel_id})")
+            _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id})")
 
             funnel_details = self._api.get_site_funnel(self._site_id, funnel_id)
             created_epoch_time = funnel_details.get("created_epoch_time")
@@ -86,7 +88,7 @@ class SiteManager:
                 step_name = funnel_step.get("name")
                 step_url = funnel_step.get("url")
 
-                print(f"Processing funnel: {funnel_name} ({funnel_id}), step: {step_name} ({step_id})")
+                _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id}), step: {step_name} ({step_id})")
 
                 step = steps.get(str(step_id))
 
@@ -107,7 +109,7 @@ class SiteManager:
                 funnel_data["last_update"] = date_query.from_time
                 funnel_data["last_update_iso"] = date_iso
 
-                print(f"Processing funnel: {funnel_name} ({funnel_id}), counter from: {date_iso}")
+                _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id}), counter from: {date_iso}")
 
                 funnel_counters = self._api.get_site_funnel_counters(self._site_id,
                                                                      funnel_id,
