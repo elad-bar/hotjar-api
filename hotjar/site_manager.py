@@ -17,7 +17,7 @@ class SiteManager:
         self._site_id = site_id
         self._site_name = site_name
         self._specific_funnels = specific_funnels
-        self._file = f"site_{self._site_id}.json"
+        self._file = f"/data/site_{self._site_id}.json"
 
         self._data = None
 

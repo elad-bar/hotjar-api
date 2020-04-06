@@ -1,7 +1,10 @@
 # Hotjar API
 
 ## Description
-Provides an easy way to integrate as data source Hotjar to analytics tools   
+Provides an easy way to integrate as data source Hotjar to analytics tools,
+On the first run, the container will try to get all data since the funnel creation date until now,
+from that point, it will do an incremental update,
+the last day will get updates along the day according to the chosen update interval.
 
 ## Environment Variables
 ```
@@ -11,12 +14,18 @@ HOTJAR_FUNNELS		CSV formated funnel Ids of funnels to work with, an empty value 
 HOTJAR_INTERVAL		Interval in minutes between fetching data from Hotjar
 ```
 
-## Docker Run
+## How to run
+
+#### Data persistence
+By default the container is being created with volume /data,
+To allow faster load (with less API calls), define local (host) path as volume 
+
+#### Docker Run
 ```
-docker run -p 5000:5000 --restart always -e HOTJAR_USERNAME=Username -e HOTJAR_PASSWORD=Password -e HOTJAR_FUNNELS= -e HOTJAR_INTERVAL=30 --name "hotjar-api" eladbar/hotjar-api:latest
+docker run -p 5000:5000 --restart always -v /data_host:/data -e HOTJAR_USERNAME=Username -e HOTJAR_PASSWORD=Password -e HOTJAR_FUNNELS= -e HOTJAR_INTERVAL=30 --name "hotjar-api" eladbar/hotjar-api:latest
 ```
 
-## Docker Compose
+#### Docker Compose
 ```
 version: '2'
 services:
@@ -24,6 +33,8 @@ services:
         ports:
             - '5000:5000'
         restart: always
+        volumes:
+            - '/data_host:/data'
         environment:
             - HOTJAR_USERNAME=Username
             - HOTJAR_PASSWORD=Password
