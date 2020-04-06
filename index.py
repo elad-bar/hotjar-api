@@ -3,7 +3,7 @@ import asyncio
 import threading
 
 import flask
-from flask import jsonify
+from flask import jsonify, abort, request
 
 from helpers.docker_logger import get_logger
 from helpers.queryable_datetime import QueryableDateTime
@@ -21,6 +21,7 @@ class WebService:
         self._password = None
         self._interval = None
         self._specific_funnels = None
+        self._api_key = None
 
         self._is_updating = False
         self._api = None
@@ -32,6 +33,7 @@ class WebService:
         self._username = os.getenv("HOTJAR_USERNAME")
         self._password = os.getenv("HOTJAR_PASSWORD")
         self._interval = int(os.getenv("HOTJAR_INTERVAL", 30)) * SECONDS
+        self._api_key = os.getenv("API_KEY")
 
         specific_funnels = os.getenv("HOTJAR_FUNNELS", "")
 
@@ -44,14 +46,18 @@ class WebService:
         self._web_service = flask.Flask(__name__)
         self._web_service.config["DEBUG"] = True
 
-        @self._web_service.route('/', methods=['GET'])
+        @self._web_service.route('/json', methods=['GET'])
         def home():
+            self.verify_api_key()
+
             data = self.aggregate()
 
             return jsonify(data)
 
         @self._web_service.route('/flat', methods=['GET'])
         def flat():
+            self.verify_api_key()
+
             data = self.flatten()
 
             return jsonify(data)
@@ -59,6 +65,10 @@ class WebService:
         threading.Timer(0.1, self.update_data_once).start()
 
         self._web_service.run(host='0.0.0.0')
+
+    def verify_api_key(self):
+        if self._api_key is not None and self._api_key != request.args.get("APIKEY"):
+            abort(403, "Invalid credentials")
 
     def update_data_once(self):
         if self._is_updating:

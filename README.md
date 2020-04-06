@@ -10,8 +10,9 @@ the last day will get updates along the day according to the chosen update inter
 ```
 HOTJAR_USERNAME	    Username of Hotjar account
 HOTJAR_PASSWORD	    Password of Hotjar account
-HOTJAR_FUNNELS		CSV formated funnel Ids of funnels to work with, an empty value will work with all funnels
+HOTJAR_FUNNELS		Optional, CSV formated funnel Ids of funnels to work with, an empty value will work with all funnels
 HOTJAR_INTERVAL		Interval in minutes between fetching data from Hotjar
+API_KEY             Optional, protected the API with secret API key
 ```
 
 ## How to run
@@ -22,7 +23,7 @@ To allow faster load (with less API calls), define local (host) path as volume
 
 #### Docker Run
 ```
-docker run -p 5000:5000 --restart always -v /data_host:/data -e HOTJAR_USERNAME=Username -e HOTJAR_PASSWORD=Password -e HOTJAR_FUNNELS= -e HOTJAR_INTERVAL=30 --name "hotjar-api" eladbar/hotjar-api:latest
+docker run -p 5000:5000 --restart always -v /data_host:/data -e HOTJAR_USERNAME=Username -e HOTJAR_PASSWORD=Password -e HOTJAR_FUNNELS= -e HOTJAR_INTERVAL=30 -e API_KEY=APIKEY --name "hotjar-api" eladbar/hotjar-api:latest
 ```
 
 #### Docker Compose
@@ -40,12 +41,17 @@ services:
             - HOTJAR_PASSWORD=Password
             - HOTJAR_FUNNELS=
             - HOTJAR_INTERVAL=30
+            - API_KEY=APIKey
         container_name: hotjar-api
         image: 'eladbar/hotjar-api:latest'
 ```
 
 ## API Endpoints
-#### Default (/) - Response (JSON)
+#### With API_KEY
+Request should be with query string parameter APIKEY (Case Sensitive): <br/>
+http://IP/json?APIKEY=APIKey
+
+#### /json
 ```json
 {
   "{SITE_ID}": {
@@ -108,7 +114,7 @@ Funnel Step Counter Object
 ```
 
 
-#### Flat (/flat) - Response (JSON)
+#### /flat
 ```json
 [
   {
