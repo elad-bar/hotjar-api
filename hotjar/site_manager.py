@@ -42,6 +42,13 @@ class SiteManager:
         if path.exists(self._file):
             with open(self._file) as json_file:
                 self._data = json.load(json_file)
+
+                version = self._data.get("version", "0.0")
+
+                if version is None or version != VERSION:
+                    _LOGGER.info(f"Data cleaned due to incompatible version {version}")
+
+                    self._data = {}
         else:
             self._data = {}
 

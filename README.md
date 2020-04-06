@@ -19,7 +19,9 @@ API_KEY             Optional, protected the API with secret API key
 
 #### Data persistence
 By default the container is being created with volume /data,
-To allow faster load (with less API calls), define local (host) path as volume 
+To allow faster load (with less API calls), define local (host) path as volume.
+
+Data will be fully reloaded when there is a major version change
 
 #### Docker Run
 ```
@@ -50,6 +52,23 @@ services:
 #### With API_KEY
 Request should be with query string parameter APIKEY (Case Sensitive): <br/>
 http://IP/json?APIKEY=APIKey
+
+#### /
+```json
+{
+  "records": 1, 
+  "sites": 1, 
+  "version": "1.0"
+}
+```
+
+Description:
+```
+Root object
+    records             Number of records reterived from Hotjar
+    sites               Number of sites
+    version             Version of Hotjar-API
+```
 
 #### /json
 ```json

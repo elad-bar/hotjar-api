@@ -7,7 +7,7 @@ from flask import jsonify, abort, request
 
 from helpers.docker_logger import get_logger
 from helpers.queryable_datetime import QueryableDateTime
-from hotjar.api import HotjarAPI
+from hotjar.api import HotjarAPI, VERSION
 from hotjar.site_manager import SiteManager
 
 SECONDS = 60
@@ -46,8 +46,26 @@ class WebService:
         self._web_service = flask.Flask(__name__)
         self._web_service.config["DEBUG"] = True
 
+        @self._web_service.route('/', methods=['GET'])
+        def api_home():
+            self.verify_api_key()
+
+            flat_records = self.flatten()
+            flat_records_count = len(flat_records)
+
+            site_records = self.aggregate()
+            site_records_count = len(site_records.keys())
+
+            data = {
+                "version": VERSION,
+                "sites": site_records_count,
+                "records": flat_records_count
+            }
+
+            return jsonify(data)
+
         @self._web_service.route('/json', methods=['GET'])
-        def home():
+        def api_json():
             self.verify_api_key()
 
             data = self.aggregate()
@@ -55,7 +73,7 @@ class WebService:
             return jsonify(data)
 
         @self._web_service.route('/flat', methods=['GET'])
-        def flat():
+        def api_flat():
             self.verify_api_key()
 
             data = self.flatten()

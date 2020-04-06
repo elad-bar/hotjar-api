@@ -1,3 +1,5 @@
+VERSION = "1.0"
+
 PROP_ID = "id"
 PROP_NAME = "name"
 PROP_CREATED = "created"
