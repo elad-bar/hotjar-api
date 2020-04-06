@@ -90,7 +90,11 @@ class SiteManager:
                     changed = funnel_loaded or funnel_details_loaded or funnel_counters_loaded
 
             if changed:
+                _LOGGER.info(f"Site {self._site_name} ({self._site_id}) is updated")
+
                 self._save_data()
+            else:
+                _LOGGER.info(f"Site {self._site_name} ({self._site_id}) was up to date")
 
     @staticmethod
     def get_date_iso(epoch):

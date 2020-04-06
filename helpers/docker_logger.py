@@ -2,13 +2,14 @@ import logging
 
 FORMATTER = '%(levelname)s %(message)s'
 
-logging.basicConfig(format=FORMATTER)
-
 
 def get_logger(name):
     logger = logging.getLogger(name)
 
     handler = logging.StreamHandler()
+
+    formatter = logging.Formatter(FORMATTER)
+    handler.setFormatter(formatter)
 
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
