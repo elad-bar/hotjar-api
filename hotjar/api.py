@@ -5,19 +5,9 @@ import requests
 from typing import Optional
 
 from helpers.docker_logger import get_logger
+
+from .const import *
 from .exceptions import AuthorizationError
-
-LOGIN_URL = "https://insights.hotjar.com/api/v2/users"
-USER_INFO_URL = "https://insights.hotjar.com/api/v2/users/me"
-QUERY_URL = "https://insights.hotjar.com/api/v1/sites"
-
-HEADERS_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu " \
-                     "Chromium/75.0.3770.90 Chrome/75.0.3770.90 Safari/537.36 "
-
-ENDPOINT_FEED = "feed"
-ENDPOINT_FUNNELS = "funnels"
-ENDPOINT_STATISTICS = "statistics"
-ENDPOINT_FEEDBACK = "feedback"
 
 _LOGGER = get_logger(__name__)
 
@@ -71,20 +61,28 @@ class HotjarAPI:
     def api_get(self, url, params: dict = None):
         result = None
 
-        try:
-            if self.has_valid_session():
-                session: requests.Session = self._session
+        for i in range(2):
+            try:
+                if self.has_valid_session():
+                    session: requests.Session = self._session
 
-                response = session.get(url, params=params)
+                    response = session.get(url, params=params)
 
-                response.raise_for_status()
+                    response.raise_for_status()
 
-                result = response.json()
+                    result = response.json()
 
-        except Exception as ex:
-            self._logged_in = False
+                    if i > 0:
+                        _LOGGER.info(f"API GET request performed on retry #{i + 1}, Url: {url}")
 
-            _LOGGER.error(f"Failed to initialize API connection for {self._email}, Error: {str(ex)}")
+                    break
+            except Exception as ex:
+                self._logged_in = False
+
+                if i + 1 == 2:
+                    _LOGGER.error(f"Failed to perform API GET request #{i + 1}, Url: {url}, Error: {str(ex)}")
+                else:
+                    _LOGGER.warning(f"Failed to perform API GET request #{i + 1}, Url: {url}, Error: {str(ex)}")
 
         return result
 

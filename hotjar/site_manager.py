@@ -6,9 +6,13 @@ from datetime import datetime
 
 from helpers.docker_logger import get_logger
 from helpers.queryable_datetime import QueryableDateTime
+
 from .api import HotjarAPI
+from .const import *
 
 _LOGGER = get_logger(__name__)
+
+#  LOCAL_DEBUG = True
 
 
 class SiteManager:
@@ -18,6 +22,9 @@ class SiteManager:
         self._site_name = site_name
         self._specific_funnels = specific_funnels
         self._file = f"/data/site_{self._site_id}.json"
+
+        #  if LOCAL_DEBUG:
+        #      self._file = self._file.replace("/data/", "")
 
         self._data = None
 
@@ -46,68 +53,93 @@ class SiteManager:
         _LOGGER.debug(f"Updating site: {self._site_name} ({self._site_id})")
 
         all_funnels = self._api.get_site_funnels(self._site_id)
+        changed = False
 
-        for funnel in all_funnels:
-            funnel_name = funnel.get("name")
-            funnel_id = funnel.get("id")
+        if all_funnels is None:
+            _LOGGER.error("Could not load funnels from API")
+        else:
+            for funnel in all_funnels:
+                funnel_name = funnel.get(PROP_NAME)
+                funnel_id = funnel.get(PROP_ID)
+                funnel_key = str(funnel_id)
 
-            if self._specific_funnels is not None and str(funnel_id) not in self._specific_funnels:
-                _LOGGER.debug(f"Skipping funnel: {funnel_name} ({funnel_id})")
-                continue
+                if self._specific_funnels is not None and funnel_key not in self._specific_funnels:
+                    _LOGGER.debug(f"Skipping funnel: {funnel_name} ({funnel_id})")
+                    continue
 
-            _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id})")
+                _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id})")
 
-            funnel_details = self._api.get_site_funnel(self._site_id, funnel_id)
-            created_epoch_time = funnel_details.get("created_epoch_time")
+                funnel_details = self._api.get_site_funnel(self._site_id, funnel_id)
 
-            funnel_data = self._data.get(str(funnel_id))
+                if funnel_details is None:
+                    _LOGGER.error(f"Could not load funnel {funnel_name} ({funnel_id}) from API")
+                else:
+                    funnel_loaded = self.load_funnel(funnel_id, funnel_details)
 
-            if funnel_data is None:
-                funnel_data = {
-                    "name": funnel_name,
-                    "id": funnel_id,
-                    "created": created_epoch_time,
-                    "created_iso": datetime.fromtimestamp(created_epoch_time).date().isoformat(),
-                    "last_update": created_epoch_time,
-                    "last_update_iso": datetime.fromtimestamp(created_epoch_time).date().isoformat(),
-                    "steps": {}
-                }
+                    funnel_details_loaded = self.load_funnel_details(funnel_id, funnel_details)
 
-                self._data[funnel_id] = funnel_data
+                    funnel_counters_loaded = self.load_funnel_counters(funnel_id)
 
-            last_update = funnel_data.get("last_update", created_epoch_time)
+                    changed = funnel_loaded or funnel_details_loaded or funnel_counters_loaded
+
+            if changed:
+                self._save_data()
+
+    @staticmethod
+    def get_date_iso(epoch):
+        return datetime.fromtimestamp(epoch).date().isoformat()
+
+    def get_funnel_data(self, funnel_id):
+        funnel_data = self._data[str(funnel_id)]
+
+        return funnel_data
+
+    def load_funnel(self, funnel_id, funnel_details):
+        changed = False
+        funnel_key = str(funnel_id)
+
+        if funnel_key not in self._data and funnel_details is not None:
+            funnel_name = funnel_details.get(PROP_NAME)
+
+            created_date = funnel_details.get(PROP_CREATED_EPOCH_TIME)
+            created_date_iso = self.get_date_iso(created_date)
+
+            funnel_data = {
+                PROP_NAME: funnel_name,
+                PROP_ID: funnel_id,
+                PROP_CREATED: created_date,
+                PROP_CREATED_ISO: created_date_iso,
+                PROP_LAST_UPDATE: created_date,
+                PROP_LAST_UPDATE_ISO: created_date_iso,
+                PROP_STEPS: {}
+            }
+
+            self._data[funnel_key] = funnel_data
+
+            changed = True
+
+        return changed
+
+    def load_funnel_counters(self, funnel_id):
+        changed = False
+
+        funnel_data = self.get_funnel_data(funnel_id)
+        if funnel_data is not None:
+            funnel_created = funnel_data.get(PROP_CREATED)
+            funnel_name = funnel_data.get(PROP_NAME)
+            last_update = funnel_data.get(PROP_LAST_UPDATE, funnel_created)
+
+            steps = funnel_data[PROP_STEPS]
+
             last_update_query = QueryableDateTime(last_update)
             all_dates = last_update_query.get_all_since()
-
-            steps = funnel_data["steps"]
-
-            external_funnel_steps = funnel_details["steps"]
-
-            for funnel_step in external_funnel_steps:
-                step_id = funnel_step.get("id")
-                step_name = funnel_step.get("name")
-                step_url = funnel_step.get("url")
-
-                _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id}), step: {step_name} ({step_id})")
-
-                step = steps.get(str(step_id))
-
-                if step is None:
-                    step = {
-                        "id": step_id,
-                        "name": step_name,
-                        "url": step_url,
-                        "counters": {}
-                    }
-
-                    steps[str(step_id)] = step
 
             for item in all_dates:
                 date_query: QueryableDateTime = item
                 date_iso = date_query.date.date().isoformat()
 
-                funnel_data["last_update"] = date_query.from_time
-                funnel_data["last_update_iso"] = date_iso
+                funnel_data[PROP_LAST_UPDATE] = date_query.from_time
+                funnel_data[PROP_LAST_UPDATE_ISO] = date_iso
 
                 _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id}), counter from: {date_iso}")
 
@@ -116,17 +148,61 @@ class SiteManager:
                                                                      date_query.from_time,
                                                                      date_query.to_time)
 
-                visit_counts_per_step = funnel_counters.get("visit_counts_per_step", {})
+                if funnel_counters is None:
+                    _LOGGER.error(f"Could not load funnel {funnel_name} ({funnel_id}) counters for {date_iso} from API")
+                else:
+                    visit_counts_per_step = funnel_counters.get(PROP_VISIT_COUNTS_PER_STEP, {})
 
-                for key in visit_counts_per_step:
-                    step: dict = steps[key]
-                    counters = step["counters"]
+                    for key in visit_counts_per_step:
+                        step: dict = steps[key]
+                        counters = step[PROP_COUNTERS]
 
-                    count = visit_counts_per_step[key]
+                        count = visit_counts_per_step[key]
 
-                    counters[date_iso] = {
-                        "epoch": date_query.from_time,
-                        "count": count
+                        if date_iso not in counters or counters[date_iso][PROP_COUNT] != count:
+                            counters[date_iso] = {
+                                PROP_EPOCH: date_query.from_time,
+                                PROP_COUNT: count
+                            }
+
+                            changed = True
+
+        return changed
+
+    def load_funnel_details(self, funnel_id, funnel_details):
+        changed = False
+
+        funnel_data = self.get_funnel_data(funnel_id)
+
+        if funnel_data is not None and funnel_details is not None:
+            funnel_name = funnel_data.get(PROP_NAME)
+
+            steps = funnel_data[PROP_STEPS]
+
+            external_funnel_steps = funnel_details[PROP_STEPS]
+
+            for funnel_step in external_funnel_steps:
+                step_id = funnel_step.get(PROP_ID)
+                step_name = funnel_step.get(PROP_NAME)
+                step_url = funnel_step.get(PROP_URL)
+
+                _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id}), step: {step_name} ({step_id})")
+
+                step_key = str(step_id)
+
+                step = steps.get(step_key)
+
+                if step is None:
+                    step = {
+                        PROP_ID: step_id,
+                        PROP_NAME: step_name,
+                        PROP_URL: step_url,
+                        PROP_COUNTERS: {}
                     }
 
-        self._save_data()
+                    if step_key not in steps or steps[step_key] != step:
+                        steps[step_key] = step
+
+                        changed = True
+
+        return changed
