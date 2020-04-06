@@ -1,6 +1,6 @@
 import logging
 
-FORMATTER = '%(asctime)s %(levelname)s %(module)s %(process)d %(thread)d %(message)s'
+FORMATTER = '%(levelname)s %(message)s'
 
 logging.basicConfig(format=FORMATTER)
 
