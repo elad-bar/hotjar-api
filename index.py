@@ -9,6 +9,7 @@ from helpers.docker_logger import get_logger
 from helpers.queryable_datetime import QueryableDateTime
 from hotjar.api import HotjarAPI, VERSION
 from hotjar.site_manager import SiteManager
+from hotjar.const import DEFAULT_ENVIRONMENT
 
 SECONDS = 60
 
@@ -16,7 +17,9 @@ _LOGGER = get_logger(__name__)
 
 
 class WebService:
-    def __init__(self):
+    def __init__(self, web_server):
+        _LOGGER.info("Starting")
+
         self._username = None
         self._password = None
         self._interval = None
@@ -28,8 +31,11 @@ class WebService:
         self._web_service = None
         self._site_managers = {}
         self._loop = asyncio.get_event_loop()
+        self._environment = DEFAULT_ENVIRONMENT
+        self._web_server = web_server
 
-    async def initialize(self):
+    def initialize(self):
+        self._environment = os.getenv("ENVIRONMENT", DEFAULT_ENVIRONMENT)
         self._username = os.getenv("HOTJAR_USERNAME")
         self._password = os.getenv("HOTJAR_PASSWORD")
         self._interval = int(os.getenv("HOTJAR_INTERVAL", 30)) * SECONDS
@@ -43,10 +49,7 @@ class WebService:
         self._api = HotjarAPI(self._username, self._password)
         self._api.initialize()
 
-        self._web_service = flask.Flask(__name__)
-        self._web_service.config["DEBUG"] = True
-
-        @self._web_service.route('/', methods=['GET'])
+        @self._web_server.route('/', methods=['GET'])
         def api_home():
             self.verify_api_key()
 
@@ -64,7 +67,7 @@ class WebService:
 
             return jsonify(data)
 
-        @self._web_service.route('/json', methods=['GET'])
+        @self._web_server.route('/json', methods=['GET'])
         def api_json():
             self.verify_api_key()
 
@@ -72,7 +75,7 @@ class WebService:
 
             return jsonify(data)
 
-        @self._web_service.route('/flat', methods=['GET'])
+        @self._web_server.route('/flat', methods=['GET'])
         def api_flat():
             self.verify_api_key()
 
@@ -80,9 +83,11 @@ class WebService:
 
             return jsonify(data)
 
+        _LOGGER.info("First load might take few minutes")
+
         threading.Timer(0.1, self.update_data_once).start()
 
-        self._web_service.run(host='0.0.0.0')
+        self._web_server.run(host='0.0.0.0')
 
     def verify_api_key(self):
         if self._api_key is not None and self._api_key != request.args.get("APIKEY"):
@@ -96,7 +101,7 @@ class WebService:
 
         self._is_updating = True
 
-        _LOGGER.debug("Updating data")
+        _LOGGER.info("Updating data")
 
         resources = self._api.get_resources()
 
@@ -105,11 +110,12 @@ class WebService:
         for site in sites:
             site_name = site.get("name")
             site_id = site.get("id")
+            created = site.get("created")
 
             site_manager = self._site_managers.get(site_id)
 
             if site_manager is None:
-                site_manager = SiteManager(self._api, site_id, site_name, self._specific_funnels)
+                site_manager = SiteManager(self._api, site_id, site_name, created, self._specific_funnels, self._environment)
 
                 self._site_managers[site_id] = site_manager
 
@@ -183,7 +189,10 @@ class WebService:
         return result
 
 
-web = WebService()
-asyncio.get_event_loop().run_until_complete(web.initialize())
+_web_server = flask.Flask(__name__)
+_web_server.config["DEBUG"] = False
+
+web = WebService(_web_server)
+web.initialize()
 
 

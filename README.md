@@ -6,6 +6,8 @@ On the first run, the container will try to get all data since the funnel creati
 from that point, it will do an incremental update,
 the last day will get updates along the day according to the chosen update interval.
 
+[Changelog](https://github.com/elad-bar/hotjar-api/blob/master/CHANGELOG.md)
+
 ## Environment Variables
 ```
 HOTJAR_USERNAME	    Username of Hotjar account

@@ -1,4 +1,4 @@
-VERSION = "1.0"
+VERSION = "1.1"
 
 PROP_ID = "id"
 PROP_NAME = "name"
@@ -13,6 +13,8 @@ PROP_EPOCH = "epoch"
 PROP_COUNT = "count"
 PROP_CREATED_EPOCH_TIME = "created_epoch_time"
 PROP_VISIT_COUNTS_PER_STEP = "visit_counts_per_step"
+
+DEFAULT_ENVIRONMENT = "Production"
 
 LOGIN_URL = "https://insights.hotjar.com/api/v2/users"
 USER_INFO_URL = "https://insights.hotjar.com/api/v2/users/me"

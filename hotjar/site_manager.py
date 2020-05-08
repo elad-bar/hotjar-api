@@ -12,19 +12,19 @@ from .const import *
 
 _LOGGER = get_logger(__name__)
 
-#  LOCAL_DEBUG = True
-
 
 class SiteManager:
-    def __init__(self, api: HotjarAPI, site_id: int, site_name: str, specific_funnels: list):
+    def __init__(self, api: HotjarAPI, site_id: int, site_name: str, created, specific_funnels: list, environment):
         self._api = api
         self._site_id = site_id
         self._site_name = site_name
+        self._created = created
         self._specific_funnels = specific_funnels
-        self._file = f"/data/site_{self._site_id}.json"
+        self._file = f"/data/site_{self._site_id}_v{VERSION}.json"
+        self._updates = []
 
-        #  if LOCAL_DEBUG:
-        #      self._file = self._file.replace("/data/", "")
+        if environment != DEFAULT_ENVIRONMENT:
+            self._file = self._file.replace("/data/", "")
 
         self._data = None
 
@@ -41,14 +41,13 @@ class SiteManager:
     def _load_data(self):
         if path.exists(self._file):
             with open(self._file) as json_file:
-                self._data = json.load(json_file)
+                try:
+                    self._data = json.load(json_file)
 
-                version = self._data.get("version", "0.0")
-
-                if version is None or version != VERSION:
-                    _LOGGER.info(f"Data cleaned due to incompatible version {version}")
-
+                except Exception as ex:
+                    _LOGGER.error(f"Failed to load previous state, starting from day 1, Error: {ex}")
                     self._data = {}
+
         else:
             self._data = {}
 
@@ -57,10 +56,9 @@ class SiteManager:
             json.dump(self.data, outfile)
 
     def update(self):
-        _LOGGER.debug(f"Updating site: {self._site_name} ({self._site_id})")
+        _LOGGER.info(f"Updating site: {self._site_name} ({self._site_id})")
 
         all_funnels = self._api.get_site_funnels(self._site_id)
-        changed = False
 
         if all_funnels is None:
             _LOGGER.error("Could not load funnels from API")
@@ -81,15 +79,19 @@ class SiteManager:
                 if funnel_details is None:
                     _LOGGER.error(f"Could not load funnel {funnel_name} ({funnel_id}) from API")
                 else:
-                    funnel_loaded = self.load_funnel(funnel_id, funnel_details)
+                    self.load_funnel(funnel_id, funnel_details)
 
-                    funnel_details_loaded = self.load_funnel_details(funnel_id, funnel_details)
+            for funnel_key in self._data:
+                funnel = self._data[funnel_key]
+                funnel_id = funnel.get(PROP_ID)
 
-                    funnel_counters_loaded = self.load_funnel_counters(funnel_id)
+                self.load_funnel_counters(funnel_id)
 
-                    changed = funnel_loaded or funnel_details_loaded or funnel_counters_loaded
+            changes_count = len(self._updates)
 
-            if changed:
+            self._updates = []
+
+            if changes_count > 0:
                 _LOGGER.info(f"Site {self._site_name} ({self._site_id}) is updated")
 
                 self._save_data()
@@ -106,39 +108,46 @@ class SiteManager:
         return funnel_data
 
     def load_funnel(self, funnel_id, funnel_details):
-        changed = False
         funnel_key = str(funnel_id)
+        updated = False
 
-        if funnel_key not in self._data and funnel_details is not None:
+        if funnel_details is not None:
             funnel_name = funnel_details.get(PROP_NAME)
 
             created_date = funnel_details.get(PROP_CREATED_EPOCH_TIME)
             created_date_iso = self.get_date_iso(created_date)
 
-            funnel_data = {
-                PROP_NAME: funnel_name,
-                PROP_ID: funnel_id,
-                PROP_CREATED: created_date,
-                PROP_CREATED_ISO: created_date_iso,
-                PROP_LAST_UPDATE: created_date,
-                PROP_LAST_UPDATE_ISO: created_date_iso,
-                PROP_STEPS: {}
-            }
+            latest_steps = funnel_details.get(PROP_STEPS)
+            steps = {}
 
-            self._data[funnel_key] = funnel_data
+            if funnel_key not in self._data:
+                funnel_data = {
+                    PROP_NAME: funnel_name,
+                    PROP_ID: funnel_id,
+                    PROP_CREATED: created_date,
+                    PROP_CREATED_ISO: created_date_iso,
+                    PROP_STEPS: steps,
+                }
 
-            changed = True
+                _LOGGER.info(f"Funnel data created: {funnel_data}")
 
-        return changed
+                self._data[funnel_key] = funnel_data
+                updated = True
+
+            steps_updated = self.load_funnel_steps(steps, latest_steps)
+
+            updated = updated or steps_updated
+
+        if updated and funnel_id not in self._updates:
+            self._updates.append(funnel_id)
 
     def load_funnel_counters(self, funnel_id):
         changed = False
 
         funnel_data = self.get_funnel_data(funnel_id)
         if funnel_data is not None:
-            funnel_created = funnel_data.get(PROP_CREATED)
             funnel_name = funnel_data.get(PROP_NAME)
-            last_update = funnel_data.get(PROP_LAST_UPDATE, funnel_created)
+            last_update = funnel_data.get(PROP_LAST_UPDATE, self._created)
 
             steps = funnel_data[PROP_STEPS]
 
@@ -152,7 +161,7 @@ class SiteManager:
                 funnel_data[PROP_LAST_UPDATE] = date_query.from_time
                 funnel_data[PROP_LAST_UPDATE_ISO] = date_iso
 
-                _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id}), counter from: {date_iso}")
+                _LOGGER.info(f"Processing funnel: {funnel_name} ({funnel_id}), counter from: {date_iso}")
 
                 funnel_counters = self._api.get_site_funnel_counters(self._site_id,
                                                                      funnel_id,
@@ -178,42 +187,37 @@ class SiteManager:
 
                             changed = True
 
-        return changed
+        if changed and funnel_id not in self._updates:
+            self._updates.append(funnel_id)
 
-    def load_funnel_details(self, funnel_id, funnel_details):
+    @staticmethod
+    def load_funnel_steps(steps, external_funnel_steps):
         changed = False
 
-        funnel_data = self.get_funnel_data(funnel_id)
+        for funnel_step in external_funnel_steps:
+            step_id = funnel_step.get(PROP_ID)
+            step_name = funnel_step.get(PROP_NAME)
+            step_url = funnel_step.get(PROP_URL)
 
-        if funnel_data is not None and funnel_details is not None:
-            funnel_name = funnel_data.get(PROP_NAME)
+            _LOGGER.debug(f"Processing funnel's step: {step_name} ({step_id})")
 
-            steps = funnel_data[PROP_STEPS]
+            step_key = str(step_id)
 
-            external_funnel_steps = funnel_details[PROP_STEPS]
+            step = steps.get(step_key)
 
-            for funnel_step in external_funnel_steps:
-                step_id = funnel_step.get(PROP_ID)
-                step_name = funnel_step.get(PROP_NAME)
-                step_url = funnel_step.get(PROP_URL)
+            if step is None:
+                step = {
+                    PROP_ID: step_id,
+                    PROP_NAME: step_name,
+                    PROP_URL: step_url,
+                    PROP_COUNTERS: {}
+                }
 
-                _LOGGER.debug(f"Processing funnel: {funnel_name} ({funnel_id}), step: {step_name} ({step_id})")
+                if step_key not in steps or steps[step_key] != step:
+                    steps[step_key] = step
 
-                step_key = str(step_id)
+                    _LOGGER.info(f"Funnel's step changed: {step}")
 
-                step = steps.get(step_key)
-
-                if step is None:
-                    step = {
-                        PROP_ID: step_id,
-                        PROP_NAME: step_name,
-                        PROP_URL: step_url,
-                        PROP_COUNTERS: {}
-                    }
-
-                    if step_key not in steps or steps[step_key] != step:
-                        steps[step_key] = step
-
-                        changed = True
+                    changed = True
 
         return changed
