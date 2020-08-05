@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2 2020-08-05
+
+**Bug fix:**
+
+- Add error handling for main flow
+
 ## v1.1 2020-05-08
 
 **Implemented enhancements:**
