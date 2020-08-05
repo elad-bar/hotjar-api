@@ -97,36 +97,40 @@ class WebService:
         if self._is_updating:
             _LOGGER.warning(f"Skipping update data")
 
-            return
 
-        self._is_updating = True
+        try:
+            self._is_updating = True
 
-        _LOGGER.info("Updating data")
+            _LOGGER.info("Updating data")
 
-        resources = self._api.get_resources()
+            resources = self._api.get_resources()
 
-        sites = resources.get("sites", [])
+            sites = resources.get("sites", [])
 
-        for site in sites:
-            site_name = site.get("name")
-            site_id = site.get("id")
-            created = site.get("created")
+            for site in sites:
+                site_name = site.get("name")
+                site_id = site.get("id")
+                created = site.get("created")
 
-            site_manager = self._site_managers.get(site_id)
+                site_manager = self._site_managers.get(site_id)
 
-            if site_manager is None:
-                site_manager = SiteManager(self._api, site_id, site_name, created, self._specific_funnels, self._environment)
+                if site_manager is None:
+                    site_manager = SiteManager(self._api, site_id, site_name, created, self._specific_funnels,
+                                               self._environment)
 
-                self._site_managers[site_id] = site_manager
+                    self._site_managers[site_id] = site_manager
 
-            if site_id is not None:
-                _LOGGER.debug(f"Site: {site_name} ({site_id})")
+                if site_id is not None:
+                    _LOGGER.debug(f"Site: {site_name} ({site_id})")
 
-                site_manager.update()
+                    site_manager.update()
+        except Exception as ex:
+            _LOGGER.error(f"Failed to update data, Error: {ex}")
 
-        threading.Timer(self._interval, self.update_data_once).start()
+        finally:
+            threading.Timer(self._interval, self.update_data_once).start()
 
-        self._is_updating = False
+            self._is_updating = False
 
     def aggregate(self):
         result = {}
